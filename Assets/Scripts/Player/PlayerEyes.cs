@@ -12,9 +12,11 @@ public class PlayerEyes : MonoBehaviour
     [SerializeField] private float closedAlpha = 1f;
 
     private bool isClosingEyes;
+    private bool canCloseEyes = true;
     private float currentAlpha;
 
     public bool IsClosingEyes => isClosingEyes;
+    public bool CanCloseEyes => canCloseEyes;
 
     private void Awake()
     {
@@ -32,7 +34,7 @@ public class PlayerEyes : MonoBehaviour
 
     private void HandleInput()
     {
-        if (!playerHiding.IsHiding)
+        if (!playerHiding.IsHiding || !canCloseEyes)
         {
             isClosingEyes = false;
             return;
@@ -63,4 +65,19 @@ public class PlayerEyes : MonoBehaviour
         color.a = alpha;
         eyesClosedOverlay.color = color;
     }
-}
+
+    public void ForceOpenEyes()
+    {
+        isClosingEyes = false;
+    }
+
+    public void SetCanCloseEyes(bool value)
+    {
+        canCloseEyes = value;
+
+        if (!canCloseEyes)
+        {
+            ForceOpenEyes();
+        }
+    }
+}   
