@@ -504,6 +504,7 @@ GameObject:
   - component: {fileID: 667218441}
   - component: {fileID: 667218440}
   - component: {fileID: 667218442}
+  - component: {fileID: 667218443}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -696,6 +697,23 @@ MonoBehaviour:
   eyesClosedOverlay: {fileID: 1882155564}
   fadeSpeed: 8
   closedAlpha: 1
+--- !u!114 &667218443
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 667218433}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9456c9f95d2644319bdf02febfa75764, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerStress
+  playerEyes: {fileID: 0}
+  maxStress: 100
+  stressIncreaseSpeed: 25
+  stressDecreaseSpeed: 15
+  currentStress: 0
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
