@@ -6,9 +6,35 @@ public class PlayerHiding : MonoBehaviour
     [SerializeField] private CharacterController characterController;
 
     private InteractableHidingSpot currentHidingSpot;
+    private InteractableHidingSpot lastHidingSpot;
+
     private bool isHiding;
 
     public bool IsHiding => isHiding;
+    public InteractableHidingSpot CurrentHidingSpot => currentHidingSpot;
+    public InteractableHidingSpot LastHidingSpot => lastHidingSpot;
+
+    public Vector3 LastHidingPosition
+    {
+        get
+        {
+            if (lastHidingSpot != null && lastHidingSpot.HidePoint != null)
+                return lastHidingSpot.HidePoint.position;
+
+            return transform.position;
+        }
+    }
+
+    public Vector3 LastPolloraCheckPosition
+    {
+        get
+        {
+            if (lastHidingSpot != null)
+                return lastHidingSpot.PolloraCheckPosition;
+
+            return transform.position;
+        }
+    }
 
     private void Awake()
     {
@@ -25,6 +51,8 @@ public class PlayerHiding : MonoBehaviour
             return;
 
         currentHidingSpot = hidingSpot;
+        lastHidingSpot = hidingSpot;
+
         isHiding = true;
 
         playerController.enabled = false;
@@ -48,4 +76,13 @@ public class PlayerHiding : MonoBehaviour
 
         playerController.enabled = true;
     }
-}   
+
+    public void ForceExitHiding()
+    {
+        isHiding = false;
+        currentHidingSpot = null;
+
+        if (playerController != null)
+            playerController.enabled = true;
+    }
+}

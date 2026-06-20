@@ -57,7 +57,6 @@ public class PolloraController : MonoBehaviour
     private void HandlePlayerScream()
     {
         screamDetected = true;
-
         Debug.Log("Pollora heard the scream!");
 
         if (isInspecting)
@@ -117,11 +116,13 @@ public class PolloraController : MonoBehaviour
         isRunningSequence = false;
         isRespondingToScream = true;
 
-        Debug.Log("Pollora running to scream location!");
+        Vector3 screamTargetPosition = GetScreamTargetPosition();
 
-        yield return MoveTo(inspectPoint.position, runSpeed);
+        Debug.Log("Pollora running to last hiding spot check point!");
 
-        Debug.Log("Pollora reached scream location!");
+        yield return MoveTo(screamTargetPosition, runSpeed);
+
+        Debug.Log("Pollora reached scream check point!");
 
         isInspecting = true;
 
@@ -146,6 +147,21 @@ public class PolloraController : MonoBehaviour
 
         isRespondingToScream = false;
         currentRoutine = null;
+    }
+
+    private Vector3 GetScreamTargetPosition()
+    {
+        if (playerHiding != null)
+        {
+            return playerHiding.LastPolloraCheckPosition;
+        }
+
+        if (inspectPoint != null)
+        {
+            return inspectPoint.position;
+        }
+
+        return transform.position;
     }
 
     private IEnumerator MoveTo(Vector3 targetPosition, float speed)

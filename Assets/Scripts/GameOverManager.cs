@@ -11,6 +11,7 @@ public class GameOverManager : MonoBehaviour
     [SerializeField] private PlayerController playerController;
     [SerializeField] private PlayerHiding playerHiding;
     [SerializeField] private PlayerEyes playerEyes;
+    [SerializeField] private PlayerStress playerStress;
     [SerializeField] private CharacterController characterController;
 
     [Header("Settings")]
@@ -42,6 +43,9 @@ public class GameOverManager : MonoBehaviour
             if (playerEyes == null)
                 playerEyes = player.GetComponent<PlayerEyes>();
 
+            if (playerStress == null)
+                playerStress = player.GetComponent<PlayerStress>();
+
             if (characterController == null)
                 characterController = player.GetComponent<CharacterController>();
         }
@@ -53,7 +57,6 @@ public class GameOverManager : MonoBehaviour
             return;
 
         Debug.Log($"GAME OVER: {reason}");
-
         StartCoroutine(GameOverRoutine());
     }
 
@@ -67,6 +70,11 @@ public class GameOverManager : MonoBehaviour
             playerEyes.ForceOpenEyes();
         }
 
+        if (playerHiding != null)
+        {
+            playerHiding.ForceExitHiding();
+        }
+
         if (playerController != null)
             playerController.enabled = false;
 
@@ -74,8 +82,16 @@ public class GameOverManager : MonoBehaviour
 
         RespawnPlayer();
 
+        if (playerStress != null)
+        {
+            playerStress.ResetStress();
+        }
+
         if (playerEyes != null)
+        {
             playerEyes.SetCanCloseEyes(true);
+            playerEyes.ForceOpenEyes();
+        }
 
         if (playerController != null)
             playerController.enabled = true;

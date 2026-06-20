@@ -126,4 +126,20 @@ public class PlayerStress : MonoBehaviour
             Debug.Log("Player recovered from scream state. Can close eyes again.");
         }
     }
+
+    public void ResetStress()
+    {
+        currentStress = 0f;
+        currentStressState = StressState.Calm;
+        previousStressState = currentStressState;
+        hasScreamed = false;
+
+        if (playerEyes != null)
+        {
+            playerEyes.SetCanCloseEyes(true);
+            playerEyes.ForceOpenEyes();
+        }
+
+        Debug.Log("Stress reset.");
+    }
 }
