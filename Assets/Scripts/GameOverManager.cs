@@ -13,9 +13,10 @@ public class GameOverManager : MonoBehaviour
     [SerializeField] private PlayerEyes playerEyes;
     [SerializeField] private PlayerStress playerStress;
     [SerializeField] private CharacterController characterController;
+    [SerializeField] private GameOverUI gameOverUI;
 
     [Header("Settings")]
-    [SerializeField] private float respawnDelay = 2f;
+    [SerializeField] private float respawnDelay = 3.5f;
 
     [Header("Debug")]
     [SerializeField] private bool isGameOver;
@@ -49,6 +50,11 @@ public class GameOverManager : MonoBehaviour
             if (characterController == null)
                 characterController = player.GetComponent<CharacterController>();
         }
+
+        if (gameOverUI == null)
+        {
+            gameOverUI = FindAnyObjectByType<GameOverUI>();
+        }
     }
 
     public void TriggerGameOver(string reason)
@@ -63,6 +69,11 @@ public class GameOverManager : MonoBehaviour
     private IEnumerator GameOverRoutine()
     {
         isGameOver = true;
+
+        if (gameOverUI != null)
+        {
+            gameOverUI.ShowGameOver();
+        }
 
         if (playerEyes != null)
         {
@@ -95,6 +106,11 @@ public class GameOverManager : MonoBehaviour
 
         if (playerController != null)
             playerController.enabled = true;
+
+        if (gameOverUI != null)
+        {
+            gameOverUI.HideGameOver();
+        }
 
         isGameOver = false;
 
