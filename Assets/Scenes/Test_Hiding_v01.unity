@@ -869,8 +869,14 @@ MonoBehaviour:
   inspectPoint: {fileID: 2107737292}
   leavePoint: {fileID: 1606978400}
   playerDetection: {fileID: 667218445}
+  playerHiding: {fileID: 667218441}
   moveSpeed: 4
-  inspectDuration: 5
+  runSpeed: 5
+  inspectDuration: 15
+  screamInspectDuration: 2
+  screamDetected: 0
+  isInspecting: 0
+  isRespondingToScream: 0
 --- !u!136 &850344893
 CapsuleCollider:
   m_ObjectHideFlags: 0

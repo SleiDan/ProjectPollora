@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public enum StressState
@@ -10,6 +11,8 @@ public enum StressState
 
 public class PlayerStress : MonoBehaviour
 {
+    public static event Action OnPlayerScreamed;
+
     [Header("References")]
     [SerializeField] private PlayerEyes playerEyes;
 
@@ -97,8 +100,15 @@ public class PlayerStress : MonoBehaviour
         if (currentStress >= maxStress && !hasScreamed)
         {
             hasScreamed = true;
+
             Debug.Log("PLAYER SCREAMED!");
-            playerEyes.SetCanCloseEyes(false);
+
+            if (playerEyes != null)
+            {
+                playerEyes.SetCanCloseEyes(false);
+            }
+
+            OnPlayerScreamed?.Invoke();
         }
     }
 
@@ -107,8 +117,13 @@ public class PlayerStress : MonoBehaviour
         if (hasScreamed && currentStressState == StressState.Calm)
         {
             hasScreamed = false;
-            Debug.Log("Player can close eyes again.");
-            playerEyes.SetCanCloseEyes(true);
+
+            if (playerEyes != null)
+            {
+                playerEyes.SetCanCloseEyes(true);
+            }
+
+            Debug.Log("Player recovered from scream state. Can close eyes again.");
         }
     }
 }
