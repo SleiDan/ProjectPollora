@@ -11,6 +11,7 @@ public class PolloraController : MonoBehaviour
     [Header("References")]
     [SerializeField] private PlayerDetection playerDetection;
     [SerializeField] private PlayerHiding playerHiding;
+    [SerializeField] private PolloraFootsteps polloraFootsteps;
 
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 2f;
@@ -27,6 +28,14 @@ public class PolloraController : MonoBehaviour
 
     private bool isRunningSequence;
     private Coroutine currentRoutine;
+
+    private InteractableHidingSpot screamHidingSpot;
+
+    private void Awake()
+    {
+        if (polloraFootsteps == null)
+            polloraFootsteps = GetComponent<PolloraFootsteps>();
+    }
 
     private void OnEnable()
     {
@@ -65,6 +74,11 @@ public class PolloraController : MonoBehaviour
             return;
         }
 
+        if (playerHiding != null)
+        {
+            screamHidingSpot = playerHiding.LastHidingSpot;
+        }
+
         if (currentRoutine != null)
         {
             StopCoroutine(currentRoutine);
@@ -81,15 +95,15 @@ public class PolloraController : MonoBehaviour
 
         Debug.Log("Pollora Approaching");
 
-        yield return MoveTo(inspectPoint.position, moveSpeed);
+        yield return MoveTo(inspectPoint.position, moveSpeed, false);
 
         Debug.Log("Pollora Inspecting");
 
         isInspecting = true;
 
-        if (playerDetection != null)
+        if (playerDetection != null && playerHiding != null)
         {
-            playerDetection.StartInspection();
+            playerDetection.StartInspection(playerHiding.LastHidingSpot);
         }
 
         yield return new WaitForSeconds(inspectDuration);
@@ -103,7 +117,7 @@ public class PolloraController : MonoBehaviour
 
         Debug.Log("Pollora Leaving");
 
-        yield return MoveTo(leavePoint.position, moveSpeed);
+        yield return MoveTo(leavePoint.position, moveSpeed, false);
 
         Debug.Log("Pollora Gone");
 
@@ -118,39 +132,57 @@ public class PolloraController : MonoBehaviour
 
         Vector3 screamTargetPosition = GetScreamTargetPosition();
 
-        Debug.Log("Pollora running to last hiding spot check point!");
+        Debug.Log("Pollora running to scream hiding spot check point!");
 
-        yield return MoveTo(screamTargetPosition, runSpeed);
+        yield return MoveTo(screamTargetPosition, runSpeed, true);
 
         Debug.Log("Pollora reached scream check point!");
 
         isInspecting = true;
 
-        if (playerHiding != null && playerHiding.IsHiding)
+        if (playerDetection != null)
         {
-            GameOverManager.Instance.TriggerGameOver("Stayed in hiding spot after scream");
+            playerDetection.StartInspection(screamHidingSpot);
+        }
+
+        if (playerHiding != null &&
+            playerHiding.IsHiding &&
+            playerHiding.CurrentHidingSpot == screamHidingSpot)
+        {
+            GameOverManager.Instance.TriggerGameOver("Stayed in same hiding spot after scream");
         }
         else
         {
-            Debug.Log("Player escaped hiding spot after scream.");
+            Debug.Log("Player escaped the compromised hiding spot.");
         }
 
         yield return new WaitForSeconds(screamInspectDuration);
+
+        if (playerDetection != null)
+        {
+            playerDetection.EndInspection();
+        }
 
         isInspecting = false;
 
         Debug.Log("Pollora Leaving after scream response");
 
-        yield return MoveTo(leavePoint.position, moveSpeed);
+        yield return MoveTo(leavePoint.position, moveSpeed, false);
 
         Debug.Log("Pollora Gone");
 
         isRespondingToScream = false;
+        screamHidingSpot = null;
         currentRoutine = null;
     }
 
     private Vector3 GetScreamTargetPosition()
     {
+        if (screamHidingSpot != null)
+        {
+            return screamHidingSpot.PolloraCheckPosition;
+        }
+
         if (playerHiding != null)
         {
             return playerHiding.LastPolloraCheckPosition;
@@ -164,8 +196,13 @@ public class PolloraController : MonoBehaviour
         return transform.position;
     }
 
-    private IEnumerator MoveTo(Vector3 targetPosition, float speed)
+    private IEnumerator MoveTo(Vector3 targetPosition, float speed, bool running)
     {
+        if (polloraFootsteps != null)
+        {
+            polloraFootsteps.StartFootsteps(running);
+        }
+
         while (Vector3.Distance(transform.position, targetPosition) > 0.05f)
         {
             transform.position = Vector3.MoveTowards(
@@ -175,6 +212,11 @@ public class PolloraController : MonoBehaviour
             );
 
             yield return null;
+        }
+
+        if (polloraFootsteps != null)
+        {
+            polloraFootsteps.StopFootsteps();
         }
     }
 }
