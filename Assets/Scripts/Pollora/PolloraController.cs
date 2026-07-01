@@ -55,14 +55,6 @@ public class PolloraController : MonoBehaviour
         }
     }
 
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.G) && !isRunningSequence && !isRespondingToScream)
-        {
-            currentRoutine = StartCoroutine(InspectionSequence());
-        }
-    }
-
     private void HandlePlayerScream()
     {
         screamDetected = true;
