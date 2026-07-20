@@ -23,6 +23,18 @@ public class GameOverManager : MonoBehaviour
 
     public bool IsGameOver => isGameOver;
 
+    public static bool TryTriggerGameOver(string reason)
+    {
+        if (Instance == null)
+        {
+            Debug.LogError($"Cannot trigger Game Over because no {nameof(GameOverManager)} exists in the scene. Reason: {reason}");
+            return false;
+        }
+
+        Instance.TriggerGameOver(reason);
+        return true;
+    }
+
     private void Awake()
     {
         if (Instance != null && Instance != this)

@@ -1,5 +1,6 @@
 using UnityEngine;
 
+[RequireComponent(typeof(CharacterController))]
 public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
@@ -28,6 +29,16 @@ public class PlayerController : MonoBehaviour
             {
                 cameraTransform = mainCamera.transform;
             }
+        }
+
+        if (cameraTransform == null)
+        {
+            Debug.LogError(
+                "PlayerController requires a camera Transform. Assign one in the Inspector or tag the player camera as MainCamera.",
+                this
+            );
+
+            enabled = false;
         }
     }
 

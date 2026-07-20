@@ -1,5 +1,6 @@
 using UnityEngine;
 
+[RequireComponent(typeof(PlayerEyes), typeof(PlayerHiding))]
 public class PlayerDetection : MonoBehaviour
 {
     [Header("References")]
@@ -15,7 +16,10 @@ public class PlayerDetection : MonoBehaviour
     [SerializeField] private bool inspectionActive;
     [SerializeField] private InteractableHidingSpot inspectedHidingSpot;
 
+    private bool hasLoggedSafeHidingSpot;
+
     public bool IsDetected => currentDetection >= maxDetection;
+    public bool IsInspectionActive => inspectionActive;
 
     private void Awake()
     {
@@ -49,7 +53,7 @@ public class PlayerDetection : MonoBehaviour
 
         if (currentDetection >= maxDetection)
         {
-            GameOverManager.Instance.TriggerGameOver("Detected during correct hiding spot inspection");
+            GameOverManager.TryTriggerGameOver("Detected during correct hiding spot inspection");
         }
     }
 
@@ -57,6 +61,7 @@ public class PlayerDetection : MonoBehaviour
     {
         inspectedHidingSpot = hidingSpot;
         currentDetection = 0f;
+        hasLoggedSafeHidingSpot = false;
         inspectionActive = true;
 
         Debug.Log("Inspection Started. Inspecting: " + GetHidingSpotName(inspectedHidingSpot));
@@ -67,6 +72,7 @@ public class PlayerDetection : MonoBehaviour
         inspectionActive = false;
         inspectedHidingSpot = null;
         currentDetection = 0f;
+        hasLoggedSafeHidingSpot = false;
 
         Debug.Log("Inspection Ended");
     }
@@ -87,8 +93,10 @@ public class PlayerDetection : MonoBehaviour
 
         bool sameSpot = playerHiding.CurrentHidingSpot == inspectedHidingSpot;
 
-        if (!sameSpot)
+        if (!sameSpot && !hasLoggedSafeHidingSpot)
         {
+            hasLoggedSafeHidingSpot = true;
+
             Debug.Log(
                 "Player is safe. Pollora inspects: " +
                 GetHidingSpotName(inspectedHidingSpot) +

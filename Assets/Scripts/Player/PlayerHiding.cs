@@ -1,5 +1,6 @@
 using UnityEngine;
 
+[RequireComponent(typeof(PlayerController), typeof(CharacterController))]
 public class PlayerHiding : MonoBehaviour
 {
     [SerializeField] private PlayerController playerController;
@@ -49,6 +50,12 @@ public class PlayerHiding : MonoBehaviour
     {
         if (isHiding)
             return;
+
+        if (hidingSpot == null || hidingSpot.HidePoint == null)
+        {
+            Debug.LogError("Cannot enter a hiding spot without a valid Hide Point.", this);
+            return;
+        }
 
         currentHidingSpot = hidingSpot;
         lastHidingSpot = hidingSpot;

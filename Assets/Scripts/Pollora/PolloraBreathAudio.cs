@@ -1,7 +1,8 @@
 using System.Collections;
 using UnityEngine;
 
-public class PolloraBreathingAudio : MonoBehaviour
+[RequireComponent(typeof(AudioSource))]
+public class PolloraBreathAudio : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private AudioSource audioSource;

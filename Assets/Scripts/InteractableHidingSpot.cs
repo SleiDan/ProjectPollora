@@ -24,6 +24,18 @@ public class InteractableHidingSpot : MonoBehaviour
 
     public void Interact(PlayerHiding playerHiding)
     {
+        if (playerHiding == null)
+        {
+            Debug.LogError("Cannot use a hiding spot without a PlayerHiding component.", this);
+            return;
+        }
+
+        if (hidePoint == null)
+        {
+            Debug.LogError("Cannot use this hiding spot because its Hide Point is not assigned.", this);
+            return;
+        }
+
         playerHiding.EnterHidingSpot(this);
     }
 }

@@ -9,6 +9,7 @@ public enum StressState
     Overloaded
 }
 
+[RequireComponent(typeof(PlayerEyes))]
 public class PlayerStress : MonoBehaviour
 {
     public static event Action OnPlayerScreamed;

@@ -1,5 +1,6 @@
 using UnityEngine;
 
+[RequireComponent(typeof(PlayerStress))]
 public class PlayerHeartbeatAudio : MonoBehaviour
 {
     [Header("References")]

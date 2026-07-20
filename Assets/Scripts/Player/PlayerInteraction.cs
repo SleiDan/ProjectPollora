@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 
+[RequireComponent(typeof(PlayerHiding))]
 public class PlayerInteraction : MonoBehaviour
 {
     [Header("Interaction")]
@@ -22,6 +23,16 @@ public class PlayerInteraction : MonoBehaviour
             playerHiding = GetComponent<PlayerHiding>();
 
         HideInteractionText();
+
+        if (playerCamera == null)
+        {
+            Debug.LogError(
+                "PlayerInteraction requires a player Camera. Assign one in the Inspector or tag it as MainCamera.",
+                this
+            );
+
+            enabled = false;
+        }
     }
 
     private void Update()

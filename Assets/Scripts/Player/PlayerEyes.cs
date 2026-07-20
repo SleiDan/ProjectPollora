@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(PlayerHiding))]
 public class PlayerEyes : MonoBehaviour
 {
     [Header("References")]
@@ -80,4 +81,4 @@ public class PlayerEyes : MonoBehaviour
             ForceOpenEyes();
         }
     }
-}   
+}
