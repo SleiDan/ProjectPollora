@@ -63,6 +63,10 @@ public class PolloraController : MonoBehaviour
     [SerializeField] private float chasePathRefreshInterval = 0.15f;
     [SerializeField] [Range(0f, 10f)] private float chaseLostSightDuration = 2f;
 
+    [Header("Hearing")]
+    [SerializeField] [Range(1f, 30f)] private float runningHearingDistance = 15f;
+    [SerializeField] [Range(0f, 10f)] private float runningNoiseMemoryDuration = 2.5f;
+
     [Header("Debug")]
     [SerializeField] private PolloraState currentState = PolloraState.Inactive;
     [SerializeField] private InteractableHidingSpot currentInspectionSpot;
@@ -76,9 +80,13 @@ public class PolloraController : MonoBehaviour
     private bool lastMovementSucceeded;
     private float playerVisibleTime;
     private CharacterController playerCharacterController;
+    private PlayerController playerController;
     private GameObject visionConeObject;
     private Material visionConeMaterial;
     private Mesh visionConeMesh;
+    private bool runSuspended;
+    private Vector3 lastKnownPlayerPosition;
+    private float runningNoiseMemory;
 
     public PolloraState CurrentState => currentState;
 
@@ -91,6 +99,9 @@ public class PolloraController : MonoBehaviour
         playerCharacterController = playerHiding != null
             ? playerHiding.GetComponent<CharacterController>()
             : null;
+        playerController = playerHiding != null
+            ? playerHiding.GetComponent<PlayerController>()
+            : null;
 
         if (!HasRequiredReferences())
         {
@@ -101,11 +112,18 @@ public class PolloraController : MonoBehaviour
     private void OnEnable()
     {
         PlayerStress.OnPlayerScreamed += HandlePlayerScream;
+
+        if (playerController != null)
+            playerController.OnRunningNoise += HandleRunningNoise;
     }
 
     private void OnDisable()
     {
         PlayerStress.OnPlayerScreamed -= HandlePlayerScream;
+
+        if (playerController != null)
+            playerController.OnRunningNoise -= HandleRunningNoise;
+
         CancelCurrentRoutine();
         ResetVision();
         currentState = PolloraState.Inactive;
@@ -113,6 +131,10 @@ public class PolloraController : MonoBehaviour
 
     private void Update()
     {
+        if (runSuspended)
+            return;
+
+        runningNoiseMemory = Mathf.Max(0f, runningNoiseMemory - Time.deltaTime);
         UpdateVision();
     }
 
@@ -160,6 +182,8 @@ public class PolloraController : MonoBehaviour
         chaseCatchDistance = Mathf.Max(0.1f, chaseCatchDistance);
         chasePathRefreshInterval = Mathf.Max(0.05f, chasePathRefreshInterval);
         chaseLostSightDuration = Mathf.Max(0f, chaseLostSightDuration);
+        runningHearingDistance = Mathf.Max(1f, runningHearingDistance);
+        runningNoiseMemoryDuration = Mathf.Max(0f, runningNoiseMemoryDuration);
 
         if (Application.isPlaying && visionConeObject != null)
         {
@@ -203,7 +227,7 @@ public class PolloraController : MonoBehaviour
 
     private void StartAutomaticInspections()
     {
-        if (!isActiveAndEnabled)
+        if (!isActiveAndEnabled || runSuspended)
             return;
 
         currentRoutine = StartCoroutine(AutomaticInspectionLoop());
@@ -637,6 +661,9 @@ public class PolloraController : MonoBehaviour
         if (currentState == PolloraState.Chasing || IsGameOverActive())
             return;
 
+        if (runningNoiseMemory <= 0f && playerHiding != null)
+            lastKnownPlayerPosition = playerHiding.transform.position;
+
         Debug.Log("Pollora started chasing the player!", this);
 
         CancelCurrentRoutine();
@@ -662,7 +689,6 @@ public class PolloraController : MonoBehaviour
 
         float pathRefreshTimer = chasePathRefreshInterval;
         float lostSightTimer = 0f;
-        Vector3 lastKnownPlayerPosition = playerHiding.transform.position;
         bool lostPlayer = false;
 
         while (!IsGameOverActive())
@@ -679,6 +705,10 @@ public class PolloraController : MonoBehaviour
             {
                 lostSightTimer = 0f;
                 lastKnownPlayerPosition = playerHiding.transform.position;
+            }
+            else if (runningNoiseMemory > 0f)
+            {
+                lostSightTimer = 0f;
             }
             else
             {
@@ -820,7 +850,8 @@ public class PolloraController : MonoBehaviour
 
     private bool CanSeePlayer()
     {
-        if (playerHiding == null ||
+        if (runSuspended ||
+            playerHiding == null ||
             playerHiding.IsHiding ||
             IsGameOverActive())
         {
@@ -861,6 +892,27 @@ public class PolloraController : MonoBehaviour
 
         return hitTransform == playerTransform ||
                hitTransform.IsChildOf(playerTransform);
+    }
+
+    private void HandleRunningNoise(Vector3 noisePosition)
+    {
+        if (runSuspended ||
+            IsGameOverActive() ||
+            (noisePosition - transform.position).sqrMagnitude >
+            runningHearingDistance * runningHearingDistance)
+        {
+            return;
+        }
+
+        bool newlyHeard = runningNoiseMemory <= 0f;
+        lastKnownPlayerPosition = noisePosition;
+        runningNoiseMemory = runningNoiseMemoryDuration;
+
+        if (newlyHeard)
+            Debug.Log("Pollora heard the player running!", this);
+
+        if (currentState != PolloraState.Chasing)
+            StartChase();
     }
 
     private Vector3 GetEyePosition()
@@ -949,6 +1001,40 @@ public class PolloraController : MonoBehaviour
     public void SetPatrolPoints(Transform[] points)
     {
         patrolPoints = points;
+    }
+
+    public void PauseForRunEnd()
+    {
+        runSuspended = true;
+        CancelCurrentRoutine();
+        ResetVision();
+        currentState = PolloraState.Inactive;
+    }
+
+    public bool ResetForNewAttempt()
+    {
+        PauseForRunEnd();
+
+        lastInspectedSpot = null;
+        lastPatrolPoint = null;
+        screamHidingSpot = null;
+        lastMovementSucceeded = false;
+        runningNoiseMemory = 0f;
+        lastKnownPlayerPosition = Vector3.zero;
+
+        Vector3 resetPosition = startPoint != null
+            ? startPoint.position
+            : transform.position;
+
+        if (!TryPlaceOnNavMesh(resetPosition))
+            return false;
+
+        if (startPoint != null)
+            transform.rotation = startPoint.rotation;
+
+        runSuspended = false;
+        StartAutomaticInspections();
+        return true;
     }
 
     private void RebuildVisionCone()

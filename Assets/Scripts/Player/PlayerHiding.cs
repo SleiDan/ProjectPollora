@@ -92,4 +92,10 @@ public class PlayerHiding : MonoBehaviour
         if (playerController != null)
             playerController.enabled = true;
     }
+
+    public void ResetForNewAttempt()
+    {
+        ForceExitHiding();
+        lastHidingSpot = null;
+    }
 }

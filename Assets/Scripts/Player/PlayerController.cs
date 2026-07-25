@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 [RequireComponent(typeof(CharacterController))]
@@ -7,6 +8,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float walkSpeed = 3f;
     [SerializeField] private float runSpeed = 5f;
     [SerializeField] private float gravity = -20f;
+    [SerializeField] private float runningNoiseInterval = 0.35f;
 
     [Header("Look")]
     [SerializeField] private Transform cameraTransform;
@@ -16,6 +18,9 @@ public class PlayerController : MonoBehaviour
     private CharacterController characterController;
     private float verticalVelocity;
     private float cameraPitch;
+    private float runningNoiseTimer;
+
+    public event Action<Vector3> OnRunningNoise;
 
     private void Awake()
     {
@@ -89,5 +94,23 @@ public class PlayerController : MonoBehaviour
         velocity.y = verticalVelocity;
 
         characterController.Move(velocity * Time.deltaTime);
+        UpdateRunningNoise(isRunning && moveDirection.sqrMagnitude > 0.01f);
+    }
+
+    private void UpdateRunningNoise(bool isRunningAndMoving)
+    {
+        if (!isRunningAndMoving || !characterController.isGrounded)
+        {
+            runningNoiseTimer = 0f;
+            return;
+        }
+
+        runningNoiseTimer -= Time.deltaTime;
+
+        if (runningNoiseTimer > 0f)
+            return;
+
+        runningNoiseTimer = Mathf.Max(0.05f, runningNoiseInterval);
+        OnRunningNoise?.Invoke(transform.position);
     }
 }

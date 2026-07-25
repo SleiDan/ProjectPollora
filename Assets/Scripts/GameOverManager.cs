@@ -14,14 +14,18 @@ public class GameOverManager : MonoBehaviour
     [SerializeField] private PlayerStress playerStress;
     [SerializeField] private CharacterController characterController;
     [SerializeField] private GameOverUI gameOverUI;
+    [SerializeField] private PolloraController polloraController;
+    [SerializeField] private LevelGoal levelGoal;
 
     [Header("Settings")]
     [SerializeField] private float respawnDelay = 3.5f;
 
     [Header("Debug")]
     [SerializeField] private bool isGameOver;
+    [SerializeField] private bool isLevelComplete;
 
     public bool IsGameOver => isGameOver;
+    public bool IsRunEnded => isGameOver || isLevelComplete;
 
     public static bool TryTriggerGameOver(string reason)
     {
@@ -32,6 +36,18 @@ public class GameOverManager : MonoBehaviour
         }
 
         Instance.TriggerGameOver(reason);
+        return true;
+    }
+
+    public static bool TryCompleteLevel()
+    {
+        if (Instance == null)
+        {
+            Debug.LogError($"Cannot complete the level because no {nameof(GameOverManager)} exists in the scene.");
+            return false;
+        }
+
+        Instance.CompleteLevel();
         return true;
     }
 
@@ -67,15 +83,49 @@ public class GameOverManager : MonoBehaviour
         {
             gameOverUI = FindAnyObjectByType<GameOverUI>();
         }
+
+        if (polloraController == null)
+        {
+            polloraController = FindAnyObjectByType<PolloraController>();
+        }
+
+        if (levelGoal == null)
+        {
+            levelGoal = FindAnyObjectByType<LevelGoal>();
+        }
+    }
+
+    private void Update()
+    {
+        if (isLevelComplete && Input.GetKeyDown(KeyCode.R))
+        {
+            RestartAttempt();
+        }
     }
 
     public void TriggerGameOver(string reason)
     {
-        if (isGameOver)
+        if (IsRunEnded)
             return;
 
         Debug.Log($"GAME OVER: {reason}");
         StartCoroutine(GameOverRoutine());
+    }
+
+    public void CompleteLevel()
+    {
+        if (IsRunEnded)
+            return;
+
+        isLevelComplete = true;
+        PauseRun();
+
+        if (gameOverUI != null)
+        {
+            gameOverUI.ShowMessage("YOU ESCAPED\n\nPress R to restart");
+        }
+
+        Debug.Log("LEVEL COMPLETE");
     }
 
     private IEnumerator GameOverRoutine()
@@ -87,6 +137,15 @@ public class GameOverManager : MonoBehaviour
             gameOverUI.ShowGameOver();
         }
 
+        PauseRun();
+
+        yield return new WaitForSeconds(respawnDelay);
+
+        RestartAttempt();
+    }
+
+    private void PauseRun()
+    {
         if (playerEyes != null)
         {
             playerEyes.SetCanCloseEyes(false);
@@ -101,9 +160,17 @@ public class GameOverManager : MonoBehaviour
         if (playerController != null)
             playerController.enabled = false;
 
-        yield return new WaitForSeconds(respawnDelay);
+        polloraController?.PauseForRunEnd();
+    }
 
+    public void RestartAttempt()
+    {
         RespawnPlayer();
+
+        if (playerHiding != null)
+        {
+            playerHiding.ResetForNewAttempt();
+        }
 
         if (playerStress != null)
         {
@@ -125,8 +192,16 @@ public class GameOverManager : MonoBehaviour
         }
 
         isGameOver = false;
+        isLevelComplete = false;
+        levelGoal?.ResetGoal();
 
-        Debug.Log("Player respawned.");
+        if (polloraController != null &&
+            !polloraController.ResetForNewAttempt())
+        {
+            Debug.LogError("Pollora could not reset for the new attempt.", polloraController);
+        }
+
+        Debug.Log("New attempt started.");
     }
 
     private void RespawnPlayer()

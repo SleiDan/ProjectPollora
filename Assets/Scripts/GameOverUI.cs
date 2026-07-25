@@ -24,9 +24,19 @@ public class GameOverUI : MonoBehaviour
 
     public void ShowGameOver()
     {
+        ShowMessage("GAME OVER");
+    }
+
+    public void ShowMessage(string message)
+    {
         if (currentRoutine != null)
         {
             StopCoroutine(currentRoutine);
+        }
+
+        if (gameOverText != null)
+        {
+            gameOverText.text = message;
         }
 
         currentRoutine = StartCoroutine(ShowRoutine());
