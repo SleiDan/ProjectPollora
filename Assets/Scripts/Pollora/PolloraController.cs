@@ -10,7 +10,10 @@ public enum PolloraState
     Approaching,
     Inspecting,
     Leaving,
-    RespondingToScream
+    RespondingToScream,
+    Chasing,
+    Patrolling,
+    Searching
 }
 
 [RequireComponent(typeof(PolloraFootsteps), typeof(NavMeshAgent))]
@@ -41,15 +44,41 @@ public class PolloraController : MonoBehaviour
     [SerializeField] private float inspectDuration = 4f;
     [SerializeField] private float screamInspectDuration = 2f;
 
+    [Header("Patrol")]
+    [SerializeField] private Transform[] patrolPoints;
+    [SerializeField] private float minPatrolPause = 1f;
+    [SerializeField] private float maxPatrolPause = 3f;
+    [SerializeField] [Range(0f, 1f)] private float hidingSpotInspectionChance = 0.35f;
+
+    [Header("Vision")]
+    [SerializeField] [Range(1f, 30f)] private float visionDistance = 12f;
+    [SerializeField] [Range(0f, 360f)] private float visionAngle = 90f;
+    [SerializeField] private float eyeHeight = 1.6f;
+    [SerializeField] private float visionDetectionTime = 0.5f;
+    [SerializeField] private LayerMask visionLayers = ~0;
+    [SerializeField] private bool showVisionCone = true;
+
+    [Header("Chase")]
+    [SerializeField] private float chaseCatchDistance = 1.2f;
+    [SerializeField] private float chasePathRefreshInterval = 0.15f;
+    [SerializeField] [Range(0f, 10f)] private float chaseLostSightDuration = 2f;
+
     [Header("Debug")]
     [SerializeField] private PolloraState currentState = PolloraState.Inactive;
     [SerializeField] private InteractableHidingSpot currentInspectionSpot;
+    [SerializeField] private bool canSeePlayer;
 
     private Coroutine currentRoutine;
     private NavMeshAgent navMeshAgent;
     private InteractableHidingSpot lastInspectedSpot;
+    private Transform lastPatrolPoint;
     private InteractableHidingSpot screamHidingSpot;
     private bool lastMovementSucceeded;
+    private float playerVisibleTime;
+    private CharacterController playerCharacterController;
+    private GameObject visionConeObject;
+    private Material visionConeMaterial;
+    private Mesh visionConeMesh;
 
     public PolloraState CurrentState => currentState;
 
@@ -59,6 +88,9 @@ public class PolloraController : MonoBehaviour
             polloraFootsteps = GetComponent<PolloraFootsteps>();
 
         navMeshAgent = GetComponent<NavMeshAgent>();
+        playerCharacterController = playerHiding != null
+            ? playerHiding.GetComponent<CharacterController>()
+            : null;
 
         if (!HasRequiredReferences())
         {
@@ -75,7 +107,13 @@ public class PolloraController : MonoBehaviour
     {
         PlayerStress.OnPlayerScreamed -= HandlePlayerScream;
         CancelCurrentRoutine();
+        ResetVision();
         currentState = PolloraState.Inactive;
+    }
+
+    private void Update()
+    {
+        UpdateVision();
     }
 
     private void Start()
@@ -99,6 +137,7 @@ public class PolloraController : MonoBehaviour
             return;
         }
 
+        CreateVisionCone();
         StartAutomaticInspections();
     }
 
@@ -113,6 +152,19 @@ public class PolloraController : MonoBehaviour
         maxInspectionDelay = Mathf.Max(minInspectionDelay, maxInspectionDelay);
         inspectDuration = Mathf.Max(0f, inspectDuration);
         screamInspectDuration = Mathf.Max(0f, screamInspectDuration);
+        minPatrolPause = Mathf.Max(0f, minPatrolPause);
+        maxPatrolPause = Mathf.Max(minPatrolPause, maxPatrolPause);
+        visionDistance = Mathf.Max(0f, visionDistance);
+        eyeHeight = Mathf.Max(0f, eyeHeight);
+        visionDetectionTime = Mathf.Max(0f, visionDetectionTime);
+        chaseCatchDistance = Mathf.Max(0.1f, chaseCatchDistance);
+        chasePathRefreshInterval = Mathf.Max(0.05f, chasePathRefreshInterval);
+        chaseLostSightDuration = Mathf.Max(0f, chaseLostSightDuration);
+
+        if (Application.isPlaying && visionConeObject != null)
+        {
+            RebuildVisionCone();
+        }
     }
 
     private bool HasRequiredReferences()
@@ -161,41 +213,55 @@ public class PolloraController : MonoBehaviour
     {
         while (true)
         {
-            currentState = PolloraState.Waiting;
+            Transform patrolPoint = SelectRandomPatrolPoint();
 
-            float delay = Random.Range(minInspectionDelay, maxInspectionDelay);
-            float elapsed = 0f;
-
-            while (elapsed < delay)
+            if (patrolPoint == null)
             {
-                if (!IsGameOverActive())
+                yield return WaitForGameplaySeconds(Random.Range(minInspectionDelay, maxInspectionDelay));
+            }
+            else
+            {
+                currentState = PolloraState.Patrolling;
+                lastPatrolPoint = patrolPoint;
+
+                Debug.Log("Pollora patrolling to: " + patrolPoint.gameObject.name, this);
+                yield return MoveTo(patrolPoint.position, moveSpeed, false);
+
+                if (lastMovementSucceeded)
                 {
-                    elapsed += Time.deltaTime;
+                    yield return WaitForGameplaySeconds(Random.Range(minPatrolPause, maxPatrolPause));
                 }
-
-                yield return null;
             }
 
-            while (IsGameOverActive())
-            {
-                yield return null;
-            }
+            if (Random.value > hidingSpotInspectionChance)
+                continue;
 
             InteractableHidingSpot selectedSpot = SelectRandomHidingSpot();
 
             if (selectedSpot == null)
             {
                 Debug.LogError("Pollora could not select a valid hiding spot.", this);
-                currentRoutine = null;
-                currentState = PolloraState.Inactive;
-                yield break;
+                continue;
             }
 
-            yield return InspectHidingSpot(selectedSpot);
+            yield return InspectHidingSpot(selectedSpot, false);
         }
     }
 
-    private IEnumerator InspectHidingSpot(InteractableHidingSpot hidingSpot)
+    private IEnumerator WaitForGameplaySeconds(float duration)
+    {
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            if (!IsGameOverActive())
+                elapsed += Time.deltaTime;
+
+            yield return null;
+        }
+    }
+
+    private IEnumerator InspectHidingSpot(InteractableHidingSpot hidingSpot, bool leaveAfterInspection)
     {
         currentInspectionSpot = hidingSpot;
         lastInspectedSpot = hidingSpot;
@@ -219,15 +285,61 @@ public class PolloraController : MonoBehaviour
         yield return new WaitForSeconds(inspectDuration);
 
         EndActiveInspection();
-        currentState = PolloraState.Leaving;
-
-        Debug.Log("Pollora leaving");
-
-        yield return MoveTo(leavePoint.position, moveSpeed, false);
-
         currentInspectionSpot = null;
 
+        if (!leaveAfterInspection)
+            yield break;
+
+        currentState = PolloraState.Leaving;
+        Debug.Log("Pollora leaving");
+        yield return MoveTo(leavePoint.position, moveSpeed, false);
         Debug.Log("Pollora gone");
+    }
+
+    private Transform SelectRandomPatrolPoint()
+    {
+        if (patrolPoints == null || patrolPoints.Length == 0)
+            return null;
+
+        int validCount = 0;
+        int alternativeCount = 0;
+
+        for (int i = 0; i < patrolPoints.Length; i++)
+        {
+            Transform patrolPoint = patrolPoints[i];
+
+            if (patrolPoint == null)
+                continue;
+
+            validCount++;
+
+            if (patrolPoint != lastPatrolPoint)
+                alternativeCount++;
+        }
+
+        if (validCount == 0)
+            return null;
+
+        bool excludePrevious = alternativeCount > 0;
+        int targetIndex = Random.Range(0, excludePrevious ? alternativeCount : validCount);
+
+        for (int i = 0; i < patrolPoints.Length; i++)
+        {
+            Transform patrolPoint = patrolPoints[i];
+
+            if (patrolPoint == null ||
+                (excludePrevious && patrolPoint == lastPatrolPoint))
+            {
+                continue;
+            }
+
+            if (targetIndex == 0)
+                return patrolPoint;
+
+            targetIndex--;
+        }
+
+        return null;
     }
 
     private InteractableHidingSpot SelectRandomHidingSpot()
@@ -488,5 +600,425 @@ public class PolloraController : MonoBehaviour
     private bool IsGameOverActive()
     {
         return GameOverManager.Instance != null && GameOverManager.Instance.IsGameOver;
+    }
+
+    private void UpdateVision()
+    {
+        if (currentState == PolloraState.Chasing)
+            return;
+
+        bool sawPlayerThisFrame = CanSeePlayer();
+
+        if (sawPlayerThisFrame && !canSeePlayer)
+        {
+            Debug.Log("Pollora saw the player!", this);
+        }
+
+        canSeePlayer = sawPlayerThisFrame;
+        UpdateVisionConeColor();
+
+        if (!canSeePlayer)
+        {
+            playerVisibleTime = 0f;
+            return;
+        }
+
+        playerVisibleTime += Time.deltaTime;
+
+        if (playerVisibleTime < visionDetectionTime)
+            return;
+
+        playerVisibleTime = 0f;
+        StartChase();
+    }
+
+    private void StartChase()
+    {
+        if (currentState == PolloraState.Chasing || IsGameOverActive())
+            return;
+
+        Debug.Log("Pollora started chasing the player!", this);
+
+        CancelCurrentRoutine();
+        currentState = PolloraState.Chasing;
+        canSeePlayer = true;
+        UpdateVisionConeColor();
+        currentRoutine = StartCoroutine(ChasePlayer());
+    }
+
+    private IEnumerator ChasePlayer()
+    {
+        if (!navMeshAgent.isOnNavMesh)
+        {
+            Debug.LogError("Pollora cannot chase because its NavMeshAgent is not on a NavMesh.", this);
+            FinishChase();
+            yield break;
+        }
+
+        navMeshAgent.speed = runSpeed;
+        navMeshAgent.stoppingDistance = chaseCatchDistance;
+        navMeshAgent.isStopped = false;
+        polloraFootsteps.StartFootsteps(true);
+
+        float pathRefreshTimer = chasePathRefreshInterval;
+        float lostSightTimer = 0f;
+        Vector3 lastKnownPlayerPosition = playerHiding.transform.position;
+        bool lostPlayer = false;
+
+        while (!IsGameOverActive())
+        {
+            if (playerHiding == null)
+            {
+                break;
+            }
+
+            canSeePlayer = CanSeePlayer();
+            UpdateVisionConeColor();
+
+            if (canSeePlayer)
+            {
+                lostSightTimer = 0f;
+                lastKnownPlayerPosition = playerHiding.transform.position;
+            }
+            else
+            {
+                lostSightTimer += Time.deltaTime;
+
+                if (lostSightTimer >= chaseLostSightDuration)
+                {
+                    Debug.Log("Pollora stopped chasing after losing sight of the player.", this);
+                    lostPlayer = true;
+                    break;
+                }
+            }
+
+            Vector3 toPlayer = lastKnownPlayerPosition - transform.position;
+            toPlayer.y = 0f;
+
+            if (canSeePlayer &&
+                toPlayer.sqrMagnitude <= chaseCatchDistance * chaseCatchDistance)
+            {
+                StopNavigation();
+                Debug.Log("Pollora caught the player!", this);
+                GameOverManager.TryTriggerGameOver("Caught by Pollora");
+
+                while (IsGameOverActive())
+                {
+                    yield return null;
+                }
+
+                break;
+            }
+
+            pathRefreshTimer += Time.deltaTime;
+
+            if (pathRefreshTimer >= chasePathRefreshInterval)
+            {
+                pathRefreshTimer = 0f;
+
+                if (NavMesh.SamplePosition(
+                        lastKnownPlayerPosition,
+                        out NavMeshHit playerHit,
+                        navMeshSampleDistance,
+                        navMeshAgent.areaMask))
+                {
+                    navMeshAgent.SetDestination(playerHit.position);
+                }
+            }
+
+            yield return null;
+        }
+
+        StopNavigation();
+
+        if (lostPlayer)
+        {
+            currentState = PolloraState.Searching;
+            InteractableHidingSpot nearestHidingSpot = FindNearestHidingSpotByPath(out float pathDistance);
+
+            if (nearestHidingSpot != null)
+            {
+                Debug.Log(
+                    $"Pollora searching {nearestHidingSpot.gameObject.name}; NavMesh path length: {pathDistance:F1}",
+                    this
+                );
+
+                yield return InspectHidingSpot(nearestHidingSpot, false);
+            }
+
+            FinishChase();
+            yield break;
+        }
+
+        currentState = PolloraState.Leaving;
+        yield return MoveTo(leavePoint.position, moveSpeed, false);
+        FinishChase();
+    }
+
+    private InteractableHidingSpot FindNearestHidingSpotByPath(out float shortestDistance)
+    {
+        shortestDistance = float.PositiveInfinity;
+        InteractableHidingSpot nearestHidingSpot = null;
+        NavMeshPath candidatePath = new NavMeshPath();
+
+        for (int i = 0; i < hidingSpots.Length; i++)
+        {
+            InteractableHidingSpot hidingSpot = hidingSpots[i];
+
+            if (hidingSpot == null ||
+                !NavMesh.SamplePosition(
+                    hidingSpot.PolloraCheckPosition,
+                    out NavMeshHit targetHit,
+                    navMeshSampleDistance,
+                    navMeshAgent.areaMask))
+            {
+                continue;
+            }
+
+            if (!NavMesh.CalculatePath(
+                    transform.position,
+                    targetHit.position,
+                    navMeshAgent.areaMask,
+                    candidatePath) ||
+                candidatePath.status != NavMeshPathStatus.PathComplete)
+            {
+                continue;
+            }
+
+            float candidateDistance = CalculatePathLength(candidatePath);
+
+            if (candidateDistance >= shortestDistance)
+                continue;
+
+            shortestDistance = candidateDistance;
+            nearestHidingSpot = hidingSpot;
+        }
+
+        return nearestHidingSpot;
+    }
+
+    private float CalculatePathLength(NavMeshPath path)
+    {
+        float length = 0f;
+        Vector3[] corners = path.corners;
+
+        for (int i = 1; i < corners.Length; i++)
+        {
+            length += Vector3.Distance(corners[i - 1], corners[i]);
+        }
+
+        return length;
+    }
+
+    private void FinishChase()
+    {
+        StopNavigation();
+        ResetVision();
+        currentRoutine = null;
+        StartAutomaticInspections();
+    }
+
+    private bool CanSeePlayer()
+    {
+        if (playerHiding == null ||
+            playerHiding.IsHiding ||
+            IsGameOverActive())
+        {
+            return false;
+        }
+
+        Vector3 eyePosition = GetEyePosition();
+        Vector3 playerTarget = playerCharacterController != null
+            ? playerCharacterController.bounds.center
+            : playerHiding.transform.position + Vector3.up;
+        Vector3 toPlayer = playerTarget - eyePosition;
+        float distanceToPlayer = toPlayer.magnitude;
+
+        if (distanceToPlayer <= Mathf.Epsilon ||
+            distanceToPlayer > visionDistance)
+        {
+            return false;
+        }
+
+        Vector3 directionToPlayer = toPlayer / distanceToPlayer;
+
+        if (Vector3.Angle(transform.forward, directionToPlayer) > visionAngle * 0.5f)
+            return false;
+
+        if (!Physics.Raycast(
+                eyePosition,
+                directionToPlayer,
+                out RaycastHit hit,
+                distanceToPlayer,
+                visionLayers,
+                QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        Transform hitTransform = hit.transform;
+        Transform playerTransform = playerHiding.transform;
+
+        return hitTransform == playerTransform ||
+               hitTransform.IsChildOf(playerTransform);
+    }
+
+    private Vector3 GetEyePosition()
+    {
+        return transform.position + Vector3.up * eyeHeight;
+    }
+
+    private void ResetVision()
+    {
+        canSeePlayer = false;
+        playerVisibleTime = 0f;
+        UpdateVisionConeColor();
+    }
+
+    private void CreateVisionCone()
+    {
+        if (!showVisionCone || visionConeObject != null)
+            return;
+
+        const int segmentCount = 32;
+        Vector3[] vertices = new Vector3[segmentCount + 2];
+        int[] triangles = new int[segmentCount * 3];
+        float halfAngle = visionAngle * 0.5f;
+
+        vertices[0] = Vector3.up * 0.05f;
+
+        for (int i = 0; i <= segmentCount; i++)
+        {
+            float angle = Mathf.Lerp(-halfAngle, halfAngle, i / (float)segmentCount);
+            Vector3 direction = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+            vertices[i + 1] = direction * visionDistance + Vector3.up * 0.05f;
+        }
+
+        for (int i = 0; i < segmentCount; i++)
+        {
+            int triangleIndex = i * 3;
+            triangles[triangleIndex] = 0;
+            triangles[triangleIndex + 1] = i + 1;
+            triangles[triangleIndex + 2] = i + 2;
+        }
+
+        visionConeMesh = new Mesh
+        {
+            name = "Pollora Vision Cone"
+        };
+        visionConeMesh.vertices = vertices;
+        visionConeMesh.triangles = triangles;
+        visionConeMesh.RecalculateNormals();
+        visionConeMesh.RecalculateBounds();
+
+        visionConeObject = new GameObject("Vision Cone (Debug)");
+        visionConeObject.transform.SetParent(transform, false);
+
+        MeshFilter meshFilter = visionConeObject.AddComponent<MeshFilter>();
+        meshFilter.sharedMesh = visionConeMesh;
+
+        MeshRenderer meshRenderer = visionConeObject.AddComponent<MeshRenderer>();
+        Shader coneShader = Shader.Find("Sprites/Default");
+
+        if (coneShader == null)
+        {
+            coneShader = Shader.Find("Universal Render Pipeline/Unlit");
+        }
+
+        if (coneShader == null)
+        {
+            Debug.LogWarning("Pollora vision cone shader was not found.", this);
+            visionConeObject.SetActive(false);
+            return;
+        }
+
+        visionConeMaterial = new Material(coneShader)
+        {
+            name = "Pollora Vision Cone (Debug)"
+        };
+        meshRenderer.sharedMaterial = visionConeMaterial;
+        UpdateVisionConeColor();
+    }
+
+    public void SetVisionDistance(float distance)
+    {
+        visionDistance = Mathf.Clamp(distance, 1f, 30f);
+        RebuildVisionCone();
+    }
+
+    public void SetPatrolPoints(Transform[] points)
+    {
+        patrolPoints = points;
+    }
+
+    private void RebuildVisionCone()
+    {
+        if (visionConeObject != null)
+        {
+            Destroy(visionConeObject);
+            visionConeObject = null;
+        }
+
+        if (visionConeMaterial != null)
+        {
+            Destroy(visionConeMaterial);
+            visionConeMaterial = null;
+        }
+
+        if (visionConeMesh != null)
+        {
+            Destroy(visionConeMesh);
+            visionConeMesh = null;
+        }
+
+        CreateVisionCone();
+    }
+
+    private void UpdateVisionConeColor()
+    {
+        if (visionConeMaterial == null)
+            return;
+
+        visionConeMaterial.color = canSeePlayer
+            ? new Color(1f, 0f, 0f, 0.4f)
+            : new Color(1f, 0.85f, 0f, 0.25f);
+    }
+
+    private void OnDestroy()
+    {
+        if (visionConeMaterial != null)
+        {
+            Destroy(visionConeMaterial);
+        }
+
+        if (visionConeMesh != null)
+        {
+            Destroy(visionConeMesh);
+        }
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        Vector3 eyePosition = GetEyePosition();
+        float halfAngle = visionAngle * 0.5f;
+        Vector3 leftBoundary = Quaternion.Euler(0f, -halfAngle, 0f) * transform.forward;
+        Vector3 rightBoundary = Quaternion.Euler(0f, halfAngle, 0f) * transform.forward;
+
+        Gizmos.color = canSeePlayer ? Color.red : Color.yellow;
+        Gizmos.DrawWireSphere(eyePosition, 0.08f);
+        Gizmos.DrawRay(eyePosition, leftBoundary * visionDistance);
+        Gizmos.DrawRay(eyePosition, rightBoundary * visionDistance);
+
+        const int segmentCount = 24;
+        Vector3 previousPoint = eyePosition + leftBoundary * visionDistance;
+
+        for (int i = 1; i <= segmentCount; i++)
+        {
+            float angle = Mathf.Lerp(-halfAngle, halfAngle, i / (float)segmentCount);
+            Vector3 direction = Quaternion.Euler(0f, angle, 0f) * transform.forward;
+            Vector3 nextPoint = eyePosition + direction * visionDistance;
+            Gizmos.DrawLine(previousPoint, nextPoint);
+            previousPoint = nextPoint;
+        }
     }
 }

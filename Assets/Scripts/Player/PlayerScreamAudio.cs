@@ -1,6 +1,5 @@
 using UnityEngine;
 
-[RequireComponent(typeof(AudioSource))]
 public class PlayerScreamAudio : MonoBehaviour
 {
     [SerializeField] private AudioSource audioSource;
