@@ -13,6 +13,7 @@ public enum PolloraState
     RespondingToScream,
     Chasing,
     Patrolling,
+    LookingAround,
     Searching
 }
 
@@ -62,6 +63,7 @@ public class PolloraController : MonoBehaviour
     [SerializeField] private float chaseCatchDistance = 1.2f;
     [SerializeField] private float chasePathRefreshInterval = 0.15f;
     [SerializeField] [Range(0f, 10f)] private float chaseLostSightDuration = 2f;
+    [SerializeField] [Range(0f, 10f)] private float lookAroundDuration = 3f;
 
     [Header("Hearing")]
     [SerializeField] [Range(1f, 30f)] private float runningHearingDistance = 15f;
@@ -182,6 +184,7 @@ public class PolloraController : MonoBehaviour
         chaseCatchDistance = Mathf.Max(0.1f, chaseCatchDistance);
         chasePathRefreshInterval = Mathf.Max(0.05f, chasePathRefreshInterval);
         chaseLostSightDuration = Mathf.Max(0f, chaseLostSightDuration);
+        lookAroundDuration = Mathf.Max(0f, lookAroundDuration);
         runningHearingDistance = Mathf.Max(1f, runningHearingDistance);
         runningNoiseMemoryDuration = Mathf.Max(0f, runningNoiseMemoryDuration);
 
@@ -763,6 +766,12 @@ public class PolloraController : MonoBehaviour
 
         if (lostPlayer)
         {
+            currentState = PolloraState.LookingAround;
+            Debug.Log("Pollora looking around after losing the player.", this);
+
+            if (lookAroundDuration > 0f)
+                yield return new WaitForSeconds(lookAroundDuration);
+
             currentState = PolloraState.Searching;
             InteractableHidingSpot nearestHidingSpot = FindNearestHidingSpotByPath(out float pathDistance);
 
