@@ -65,12 +65,26 @@ public class PlayerHiding : MonoBehaviour
         playerController.enabled = false;
         characterController.enabled = false;
 
-        transform.SetPositionAndRotation(
-            hidingSpot.HidePoint.position,
-            hidingSpot.HidePoint.rotation
-        );
+        Quaternion viewRotation = GetOutwardViewRotation(hidingSpot);
+        transform.SetPositionAndRotation(hidingSpot.HidePoint.position, viewRotation);
 
-        characterController.enabled = true;
+        playerController.ResetViewRotation();
+    }
+
+    private static Quaternion GetOutwardViewRotation(InteractableHidingSpot hidingSpot)
+    {
+        Vector3 lookDirection = hidingSpot.ExitPoint.position - hidingSpot.HidePoint.position;
+        lookDirection.y = 0f;
+
+        if (lookDirection.sqrMagnitude < 0.0001f)
+        {
+            lookDirection = hidingSpot.HidePoint.forward;
+            lookDirection.y = 0f;
+        }
+
+        return lookDirection.sqrMagnitude > 0.0001f
+            ? Quaternion.LookRotation(lookDirection.normalized, Vector3.up)
+            : hidingSpot.HidePoint.rotation;
     }
 
     public void ExitHidingSpot()
@@ -78,8 +92,20 @@ public class PlayerHiding : MonoBehaviour
         if (!isHiding)
             return;
 
+        InteractableHidingSpot hidingSpot = currentHidingSpot;
+
         isHiding = false;
         currentHidingSpot = null;
+
+        if (hidingSpot != null && hidingSpot.ExitPoint != null)
+        {
+            transform.SetPositionAndRotation(
+                hidingSpot.ExitPoint.position,
+                GetOutwardViewRotation(hidingSpot)
+            );
+        }
+
+        characterController.enabled = true;
 
         playerController.enabled = true;
     }
@@ -88,6 +114,9 @@ public class PlayerHiding : MonoBehaviour
     {
         isHiding = false;
         currentHidingSpot = null;
+
+        if (characterController != null)
+            characterController.enabled = true;
 
         if (playerController != null)
             playerController.enabled = true;

@@ -72,6 +72,14 @@ public class PlayerController : MonoBehaviour
         cameraTransform.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f);
     }
 
+    public void ResetViewRotation()
+    {
+        cameraPitch = 0f;
+
+        if (cameraTransform != null)
+            cameraTransform.localRotation = Quaternion.identity;
+    }
+
     private void Move()
     {
         float inputX = Input.GetAxis("Horizontal");

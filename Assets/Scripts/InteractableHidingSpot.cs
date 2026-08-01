@@ -3,9 +3,11 @@ using UnityEngine;
 public class InteractableHidingSpot : MonoBehaviour
 {
     [SerializeField] private Transform hidePoint;
+    [SerializeField] private Transform exitPoint;
     [SerializeField] private Transform polloraCheckPoint;
 
     public Transform HidePoint => hidePoint;
+    public Transform ExitPoint => exitPoint != null ? exitPoint : hidePoint;
     public Transform PolloraCheckPoint => polloraCheckPoint;
 
     public Vector3 PolloraCheckPosition

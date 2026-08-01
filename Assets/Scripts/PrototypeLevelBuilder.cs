@@ -30,7 +30,6 @@ public class PrototypeLevelBuilder : MonoBehaviour
         if (bakedLevel != null)
         {
             AssignBakedPatrolPoints(bakedLevel);
-            PlaceGameplayObjects();
             return;
         }
 

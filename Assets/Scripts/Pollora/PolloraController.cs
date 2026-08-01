@@ -53,7 +53,7 @@ public class PolloraController : MonoBehaviour
 
     [Header("Vision")]
     [SerializeField] [Range(1f, 30f)] private float visionDistance = 12f;
-    [SerializeField] [Range(0f, 360f)] private float visionAngle = 90f;
+    [SerializeField] [Range(0f, 360f)] private float visionAngle = 180f;
     [SerializeField] private float eyeHeight = 1.6f;
     [SerializeField] private float visionDetectionTime = 0.5f;
     [SerializeField] private LayerMask visionLayers = ~0;
@@ -522,14 +522,18 @@ public class PolloraController : MonoBehaviour
 
         float pathWaitTime = 0f;
 
-        while (navMeshAgent.pathPending && pathWaitTime < pathCalculationTimeout)
+        while ((navMeshAgent.pathPending ||
+                (!navMeshAgent.hasPath && !IsAtDestination(targetHit.position))) &&
+               pathWaitTime < pathCalculationTimeout)
         {
             pathWaitTime += Time.deltaTime;
             yield return null;
         }
 
-        if (navMeshAgent.pathPending ||
-            navMeshAgent.pathStatus != NavMeshPathStatus.PathComplete)
+        if (!IsAtDestination(targetHit.position) &&
+            (navMeshAgent.pathPending ||
+             !navMeshAgent.hasPath ||
+             navMeshAgent.pathStatus != NavMeshPathStatus.PathComplete))
         {
             Debug.LogError($"Pollora could not calculate a complete path to {targetHit.position}.", this);
             StopNavigation();
@@ -538,10 +542,11 @@ public class PolloraController : MonoBehaviour
 
         polloraFootsteps.StartFootsteps(running);
 
-        while (navMeshAgent.remainingDistance > navMeshAgent.stoppingDistance)
+        while (!IsAtDestination(targetHit.position))
         {
-            if (!navMeshAgent.hasPath ||
-                navMeshAgent.pathStatus != NavMeshPathStatus.PathComplete)
+            if (!navMeshAgent.pathPending &&
+                (!navMeshAgent.hasPath ||
+                 navMeshAgent.pathStatus != NavMeshPathStatus.PathComplete))
             {
                 Debug.LogError("Pollora lost its NavMesh path while moving.", this);
                 StopNavigation();
@@ -553,6 +558,15 @@ public class PolloraController : MonoBehaviour
 
         lastMovementSucceeded = true;
         StopNavigation();
+    }
+
+    private bool IsAtDestination(Vector3 destination)
+    {
+        Vector3 offset = destination - transform.position;
+        offset.y = 0f;
+
+        float arrivalDistance = navMeshAgent.stoppingDistance + 0.05f;
+        return offset.sqrMagnitude <= arrivalDistance * arrivalDistance;
     }
 
     private void CancelCurrentRoutine()

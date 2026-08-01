@@ -17,6 +17,7 @@ public class PlayerDetection : MonoBehaviour
     [SerializeField] private InteractableHidingSpot inspectedHidingSpot;
 
     private bool hasLoggedSafeHidingSpot;
+    private bool playerWasInInspectedHidingSpot;
 
     public bool IsDetected => currentDetection >= maxDetection;
     public bool IsInspectionActive => inspectionActive;
@@ -35,11 +36,21 @@ public class PlayerDetection : MonoBehaviour
         if (!inspectionActive)
             return;
 
-        if (!IsPlayerInInspectedHidingSpot())
+        bool playerIsInInspectedHidingSpot = IsPlayerInInspectedHidingSpot();
+
+        if (playerWasInInspectedHidingSpot && !playerIsInInspectedHidingSpot)
+        {
+            GameOverManager.TryTriggerGameOver("Left hiding spot during inspection");
+            return;
+        }
+
+        if (!playerIsInInspectedHidingSpot)
         {
             currentDetection = 0f;
             return;
         }
+
+        playerWasInInspectedHidingSpot = true;
 
         if (!playerEyes.IsClosingEyes)
         {
@@ -62,6 +73,7 @@ public class PlayerDetection : MonoBehaviour
         inspectedHidingSpot = hidingSpot;
         currentDetection = 0f;
         hasLoggedSafeHidingSpot = false;
+        playerWasInInspectedHidingSpot = IsPlayerInInspectedHidingSpot();
         inspectionActive = true;
 
         Debug.Log("Inspection Started. Inspecting: " + GetHidingSpotName(inspectedHidingSpot));
@@ -73,6 +85,7 @@ public class PlayerDetection : MonoBehaviour
         inspectedHidingSpot = null;
         currentDetection = 0f;
         hasLoggedSafeHidingSpot = false;
+        playerWasInInspectedHidingSpot = false;
 
         Debug.Log("Inspection Ended");
     }
